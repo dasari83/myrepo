@@ -1,23 +1,17 @@
 #
-# Cookbook Name:: bh_nginx
+# Cookbook Name:: bh_maven
 # Recipe:: default
 #
 #
-# Tested under Ubuntu 12.04
-# with Nginx 1.4.4
+#
 
-if node['bh_nginx'] == nil  || node['bh_nginx']['version'] == nil
-  vers = "1.4.4-1~precise"
-else
-  vers = node['bh_nginx']['version']
-end
+include_recipe "bh_jdk::default"
 
-execute 'apt-get-update' do
-  command 'apt-get update'
-end
+vers = node[:bh_maven][:version]
 
-package "nginx" do
+package "maven" do 
   action :install
-  options "-y --force-yes"
   version "#{vers}"
+  options "-y --force-yes"
 end
+
