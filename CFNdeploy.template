@@ -1,0 +1,846 @@
+{
+    "AWSTemplateFormatVersion": "xxxxxx",
+    "Description": "The AutoScaledElb creates an Auto Scaling group behind a load balancer with all given input parameters and starts the initial number instances of the specified AMI.",
+    "Outputs": {
+        "URL": {
+            "Description": "URL of the website",
+            "Value": {
+                "Fn::Join": [
+                    "",
+                    [
+                        "https://",
+                        {
+                            "Fn::GetAtt": [
+                                "ElasticLoadBalancer",
+                                "DNSName"
+                            ]
+                        }
+                    ]
+                ]
+            }
+        }
+    },
+    "Conditions": {
+        "EnableSSHCondition": {
+            "Fn::Equals": [
+                {
+                    "Ref": "EnableSSH"
+                },
+                "true"
+            ]
+        },
+        "EnableDNSCondition" : {
+            "Fn::Equals" : [
+                {
+                    "Ref" : "EnableDNS"
+                },
+                "true"
+            ]
+        },
+        "ASGHealthCheckTypeIsELBCondition": {
+            "Fn::Equals": [
+                {
+                    "Ref": "ASGHealthCheckType"
+                },
+                "ELB"
+            ]
+        },
+        "ELBHealthCheckURLDefinedCondition": {
+            "Fn::Not" : [{
+               "Fn::Equals" : [
+                  {"Ref" : "ELBHealthCheckURL"},
+                  "NONE"
+               ]
+            }]
+        }
+    },
+    "Parameters": {
+        "AmiId": {
+            "Description": "ID of the AMI to scale.",
+            "Type": "String"
+        },
+        "Change": {
+            "Description": "Change control ticket for this deployment.",
+            "Type": "String"
+        },
+        "ELBType": {
+            "Default": "internet-facing",
+            "Description": "Type of ELB - internal or external.",
+            "Type": "String"
+        },
+        "ElbPort": {
+            "Default": "443",
+            "Description": "TCP/IP port of the ELB.",
+            "Type": "String"
+        },
+        "EnableSSH": {
+            "AllowedValues": [
+                "true",
+                "false"
+            ],
+            "ConstraintDescription": "must true or false.",
+            "Default": "false",
+            "Description": "Enable ssh access.  Default is true so that the resulting instance can be checked in the fabrication environment.",
+            "Type": "String"
+        },
+        "EnableDNS": {
+            "AllowedValues": [
+                "true",
+                "false"
+            ],
+            "ConstraintDescription": "must true or false.",
+            "Default": "false",
+            "Description": "Enable DNS record creation.  Default is false so no updates to property files are required.",
+            "Type": "String"
+        },
+        "ASGHealthCheckGracePeriod": {
+            "Default": "300",
+            "Description": "Set the healthcheck grace period before the first healthcheck for the ELB ASG. Default is 120 seconds.",
+            "Type": "String"
+        },
+        "ASGHealthCheckType": {
+            "AllowedValues": [
+                "ELB",
+                "INSTANCE"
+            ],
+            "ConstraintDescription": "must be ELB or INSTANCE.",
+            "Default": "INSTANCE",
+            "Description": "Set the healthcheck type for the ELB ASG. Default is INSTANCE which was the default behavior before adding this parameter.",
+            "Type": "String"
+        },
+        "ELBHealthCheckURL": {
+            "Default": "NONE",
+            "Description": "Set the healthcheck URL for the ELB ASG. There is no default.",
+            "Type": "String"
+        },
+        "KeyName": {
+            "Default": "preprod",
+            "Description": "Key Name for ssh access. This should be a valid key pair name.",
+            "Type": "String"
+        },
+        "Environment": {
+            "AllowedValues": [
+                "Development",
+                "qa",
+		            "integration",
+		"dr",
+                "uat",
+                "demo",
+                "management",
+                "sandbox",
+                "PreProduction",
+                "preprod",
+		            "postproduction",
+                "Production",
+                "production",
+                "sandbox",
+                "performance",
+                "Performance"
+            ],
+            "Description": "Type of environment.",
+            "Type": "String"
+        },
+        "HealthCheckPort": {
+            "Default": "443",
+            "Description": "TCP/IP port of the web server",
+            "Type": "String"
+        },
+        "InitialInstanceCount": {
+            "Default": "2",
+            "Description": "Number of initial EC2 instances to launch",
+            "Type": "Number"
+        },
+        "InstanceType": {
+            "AllowedValues": [
+                "m1.small",
+                "m1.medium",
+                "m1.large",
+                "m1.xlarge",
+                "m2.xlarge",
+                "m2.2xlarge",
+                "m2.4xlarge",
+                "m3.medium",
+		        "m3.large",
+                "c1.medium",
+                "c1.xlarge",
+                "cc1.4xlarge",
+                "cc2.8xlarge",
+                "cg1.4xlarge",
+		"c3.large"
+            ],
+            "ConstraintDescription": "must be a valid EC2 instance type.",
+            "Default": "m3.medium",
+            "Description": "EC2 instance type of the AMI to scale.",
+            "Type": "String"
+        },
+        "InstanceProfile": {
+            "Default": "Deployer",
+            "Description": "EC2 instance profile.",
+            "Type": "String"
+        },
+        "ListenerProtocol": {
+            "Default": "tcp",
+            "Description": "Listenet protocol of the ELB.",
+            "Type": "String"
+        },
+        "MaximumInstanceCount": {
+            "Default": "10",
+            "Description": "Maximum number of EC2 instances to have in the group",
+            "Type": "Number"
+        },
+        "MinimumInstanceCount": {
+            "Default": "2",
+            "Description": "Minimum number of EC2 instances to keep in the group",
+            "Type": "Number"
+        },
+        "OperatorEmail": {
+            "Description": "Email address to notify if there are any scaling operations",
+            "Type": "String"
+        },
+        "Platform": {
+            "AllowedValues": [
+                "xxx",
+                "xxx",
+                "xxx"
+		"CoreServices",
+                "IT",
+                "xxx",
+                "xxx",
+                "xxx",
+                "xxx",
+            ],
+            "Description": "Type of platform",
+            "Type": "String"
+        },
+        "Project": {
+            "Description": "Specific component type (e.g. Security Gateway, Audit Support, Blah Blah, etc.)",
+            "Type": "String"
+        },
+        "Purpose": {
+            "AllowedValues": [
+                "Web",
+                "Application",
+                "DB",
+                "Bastion",
+                "Agent",
+                "Security"
+            ],
+            "Description": "Specify the purpose of this component, such as Web, DB, Application.",
+            "Type": "String"
+        },
+        "Subnets": {
+            "Description": "The list of SubnetIds in your Virtual Private Cloud (VPC)",
+            "Type": "CommaDelimitedList"
+        },
+        "VpcId": {
+            "Description": "VpcId of your existing Virtual Private Cloud (VPC)",
+            "Type": "String"
+        },
+        "MinInstancesInService": {
+            "Default": "2",
+            "Description": "Autoscaling MinInstancesInService",
+            "Type": "String"
+        },
+        "DNSShortName" : {
+            "Description" : "DNS name that will resolve to the long ELB name.",
+            "Type" : "String",
+            "Default" : "null"
+        },
+        "DNSZoneName" : {
+            "Description" : "The zone name that will be updated",
+            "Type" : "String",
+            "Default" : "local"
+        }
+    },
+    "Mappings" : {
+        "IPRangeMap" : {
+            "Development" : {
+                "Range" : "10.0.0.0/8"
+            },
+            "qa" : {
+                "Range" : "10.0.0.0/8"
+            },
+	    "dr" : {
+		"Range" : "10.0.0.0/8"
+	    },
+            "sandbox" : {
+                "Range" : "10.0.0.0/8"
+            },
+            "integration" : {
+		          "Range" : "10.192.0.0/16"
+	          },
+            "preprod" : {
+                "Range" : "10.x.0.0/16"
+            },
+            "performance" : {
+                "Range" : "10.x.0.0/16"
+            },
+	          "postproduction" : {
+		            "Range" : "10.x.0.0/16"
+	          },
+            "production" : {
+                "Range" : "10.x.0.0/16"
+            }
+        }
+    },
+    "Resources": {
+        "BadInstance": {
+            "Properties": {
+                "AlarmActions": [
+                    {
+                        "Ref": "NotificationTopic"
+                    }
+                ],
+                "AlarmDescription": {
+                    "Fn::Join": [
+                        "",
+                        [
+                            {
+                                "Ref": "Project"
+                            },
+                            " Bad Instance: Email Notification Sent"
+                        ]
+                    ]
+                },
+                "ComparisonOperator": "GreaterThanThreshold",
+                "Dimensions": [
+                    {
+                        "Name": "LoadBalancerName",
+                        "Value": {
+                            "Ref": "ElasticLoadBalancer"
+                        }
+                    }
+                ],
+                "EvaluationPeriods": "1",
+                "MetricName": "UnHealthyHostCount",
+                "Namespace": "AWS/ELB",
+                "Period": "300",
+                "Statistic": "Average",
+                "Threshold": "0"
+            },
+            "Type": "AWS::CloudWatch::Alarm"
+        },
+        "CPUAlarmHigh": {
+            "Properties": {
+                "AlarmActions": [
+                    {
+                        "Ref": "ServerScaleUpPolicy"
+                    }
+                ],
+                "AlarmDescription": {
+                    "Fn::Join": [
+                        "",
+                        [
+                            {
+                                "Ref": "Project"
+                            },
+                            " High Usage: Adding Instances"
+                        ]
+                    ]
+                },
+                "ComparisonOperator": "GreaterThanThreshold",
+                "Dimensions": [
+                    {
+                        "Name": "AutoScalingGroupName",
+                        "Value": {
+                            "Ref": "ServerAutoScalingGroup"
+                        }
+                    }
+                ],
+                "EvaluationPeriods": "2",
+                "MetricName": "CPUUtilization",
+                "Namespace": "AWS/EC2",
+                "Period": "60",
+                "Statistic": "Average",
+                "Threshold": "50"
+            },
+            "Type": "AWS::CloudWatch::Alarm"
+        },
+        "CPUAlarmLow": {
+            "Properties": {
+                "AlarmActions": [
+                    {
+                        "Ref": "ServerScaleDownPolicy"
+                    }
+                ],
+                "AlarmDescription": {
+                    "Fn::Join": [
+                        "",
+                        [
+                            {
+                                "Ref": "Project"
+                            },
+                            " Low Usage: No Action Required"
+                        ]
+                    ]
+                },
+                "ComparisonOperator": "LessThanThreshold",
+                "Dimensions": [
+                    {
+                        "Name": "AutoScalingGroupName",
+                        "Value": {
+                            "Ref": "ServerAutoScalingGroup"
+                        }
+                    }
+                ],
+                "EvaluationPeriods": "10",
+                "MetricName": "CPUUtilization",
+                "Namespace": "AWS/EC2",
+                "Period": "300",
+                "Statistic": "Average",
+                "Threshold": "10"
+            },
+            "Type": "AWS::CloudWatch::Alarm"
+        },
+        "CPUWarningHigh": {
+            "Properties": {
+                "AlarmActions": [
+                    {
+                        "Ref": "NotificationTopic"
+                    }
+                ],
+                "AlarmDescription": {
+                    "Fn::Join": [
+                        "",
+                        [
+                            {
+                                "Ref": "Project"
+                            },
+                            " High Usage: Email Notification Sent"
+                        ]
+                    ]
+                },
+                "ComparisonOperator": "GreaterThanThreshold",
+                "EvaluationPeriods": "1",
+                "MetricName": "CPUUtilization",
+                "Namespace": "AWS/EC2",
+                "Period": "60",
+                "Statistic": "Average",
+                "Threshold": "50"
+            },
+            "Type": "AWS::CloudWatch::Alarm"
+        },
+        "ElasticLoadBalancer": {
+            "Properties": {
+                "HealthCheck": {
+                    "HealthyThreshold": "3",
+                    "Interval": "30",
+                    "Target": {
+                        "Fn::If": [
+                            "ELBHealthCheckURLDefinedCondition",
+                            {
+                              "Fn::Join": [ "", [ "HTTPS:", { "Ref": "HealthCheckPort" }, { "Ref": "ELBHealthCheckURL"} ] ]
+                            },
+                            {
+                              "Fn::Join": [ "", [ "TCP:", { "Ref": "HealthCheckPort" } ] ]
+                            }
+                        ]
+                    },
+                    "Timeout": "25",
+                    "UnhealthyThreshold": "5"
+                },
+                "Listeners": [
+                    {
+                        "InstancePort": {
+                            "Ref": "HealthCheckPort"
+                        },
+                        "LoadBalancerPort": {
+                            "Ref": "ElbPort"
+                        },
+                        "Protocol": {
+                            "Ref": "ListenerProtocol"
+                        }
+                    }
+                ],
+                "Scheme": {
+                    "Ref": "ELBType"
+                },
+                "SecurityGroups": [
+                    {
+                        "Ref": "LoadBalancerSecurityGroup"
+                    }
+                ],
+                "Subnets": {
+                    "Ref": "Subnets"
+                }
+            },
+            "Type": "AWS::ElasticLoadBalancing::LoadBalancer"
+        },
+        "InstanceSecurityGroup": {
+            "Properties": {
+                "GroupDescription": "Enable HTTP access on the configured port",
+                "SecurityGroupIngress": [
+                    {
+                        "FromPort": {
+                            "Ref": "HealthCheckPort"
+                        },
+                        "IpProtocol": "tcp",
+                        "SourceSecurityGroupId": {
+                            "Ref": "LoadBalancerSecurityGroup"
+                        },
+                        "ToPort": {
+                            "Ref": "HealthCheckPort"
+                        }
+                    },
+                    { 
+                        "Fn::If": [
+                            "EnableSSHCondition",
+                            {
+                                "FromPort": "22",
+                                "IpProtocol": "tcp",
+                                "CidrIp": {"Fn::FindInMap" : [ "IPRangeMap", { "Ref" : "Environment" }, "Range" ]},
+                                "ToPort": "22"
+                            },
+                            {
+                                "Ref": "AWS::NoValue"
+                            }
+                        ]
+                    }
+                ],
+                "VpcId": {
+                    "Ref": "VpcId"
+                }
+            },
+            "Type": "AWS::EC2::SecurityGroup"
+        },
+        "LaunchConfig": {
+            "Metadata": {
+                "Warning": "In order for cloud-init to work, directory /etc/rsyslog.d must exist. See https://bugzilla.redhat.com/show_bug.cgi?id=953530"
+            },
+            "Properties": {
+                "ImageId": {
+                    "Ref": "AmiId"
+                },
+                "IamInstanceProfile": { "Ref": "InstanceProfile" },
+                "InstanceType": {
+                    "Ref": "InstanceType"
+                },
+                "SecurityGroups": [
+                    {
+                        "Ref": "InstanceSecurityGroup"
+                    }
+                ],
+                "KeyName": {
+                    "Fn::If": [
+                        "EnableSSHCondition",
+                        {
+                            "Ref": "KeyName"
+                        },
+                        {
+                            "Ref": "AWS::NoValue"
+                        }
+                    ]
+                },
+                "UserData": {
+                    "Fn::Base64": {
+                        "Fn::Join": [
+                            "",
+                            [
+                                "#!/bin/bash -x\n",
+                               Run some commands here.....
+                            ]
+                        ]
+                    }
+                }
+            },
+            "Type": "AWS::AutoScaling::LaunchConfiguration"
+        },
+        "LoadBalancerSecurityGroup": {
+            "Properties": {
+                "GroupDescription": "Enable HTTP access on healthcheck port.",
+                "SecurityGroupEgress": [
+                    {
+                        "CidrIp": "0.0.0.0/0",
+                        "FromPort": {
+                            "Ref": "HealthCheckPort"
+                        },
+                        "IpProtocol": "tcp",
+                        "ToPort": {
+                            "Ref": "HealthCheckPort"
+                        }
+                    }
+                ],
+                "SecurityGroupIngress": [
+                    {
+                        "CidrIp": "0.0.0.0/0",
+                        "FromPort": {
+                            "Ref": "ElbPort"
+                        },
+                        "IpProtocol": "tcp",
+                        "ToPort": {
+                            "Ref": "ElbPort"
+                        }
+                    }
+                ],
+                "VpcId": {
+                    "Ref": "VpcId"
+                }
+            },
+            "Type": "AWS::EC2::SecurityGroup"
+        },
+        "MaxInstances": {
+            "Properties": {
+                "AlarmActions": [
+                    {
+                        "Ref": "NotificationTopic"
+                    }
+                ],
+                "AlarmDescription": {
+                    "Fn::Join": [
+                        "",
+                        [
+                            {
+                                "Ref": "Project"
+                            },
+                            " Max Instances: **Call Support List!**"
+                        ]
+                    ]
+                },
+                "ComparisonOperator": "GreaterThanThreshold",
+                "Dimensions": [
+                    {
+                        "Name": "LoadBalancerName",
+                        "Value": {
+                            "Ref": "ElasticLoadBalancer"
+                        }
+                    }
+                ],
+                "EvaluationPeriods": "1",
+                "MetricName": "HealthyHostCount",
+                "Namespace": "AWS/ELB",
+                "Period": "300",
+                "Statistic": "Average",
+                "Threshold": "8"
+            },
+            "Type": "AWS::CloudWatch::Alarm"
+        },
+        "NoInstances": {
+            "Properties": {
+                "AlarmActions": [
+                    {
+                        "Ref": "NotificationTopic"
+                    }
+                ],
+                "AlarmDescription": {
+                    "Fn::Join": [
+                        "",
+                        [
+                            {
+                                "Ref": "Project"
+                            },
+                            " is Down: **Call Support List!**"
+                        ]
+                    ]
+                },
+                "ComparisonOperator": "LessThanThreshold",
+                "Dimensions": [
+                    {
+                        "Name": "LoadBalancerName",
+                        "Value": {
+                            "Ref": "ElasticLoadBalancer"
+                        }
+                    }
+                ],
+                "EvaluationPeriods": "1",
+                "MetricName": "HealthyHostCount",
+                "Namespace": "AWS/ELB",
+                "Period": "60",
+                "Statistic": "Average",
+                "Threshold": "1"
+            },
+            "Type": "AWS::CloudWatch::Alarm"
+        },
+        "NotificationTopic": {
+            "Properties": {
+                "Subscription": [
+                    {
+                        "Endpoint": {
+                            "Ref": "OperatorEmail"
+                        },
+                        "Protocol": "email"
+                    }
+                ]
+            },
+            "Type": "AWS::SNS::Topic"
+        },
+        "ServerAutoScalingGroup": {
+            "Properties": {
+                "HealthCheckType": {
+                    "Fn::If": [
+                        "ASGHealthCheckTypeIsELBCondition",
+                        {
+                            "Ref" : "ASGHealthCheckType"
+                        },
+                        {
+                            "Ref": "AWS::NoValue"
+                        }
+                    ]
+                },
+                "HealthCheckGracePeriod": {
+                    "Fn::If": [
+                        "ASGHealthCheckTypeIsELBCondition",
+                        {
+                            "Ref" : "ASGHealthCheckGracePeriod"
+                        },
+                        {
+                            "Ref": "AWS::NoValue"
+                        }
+                    ]
+                },
+                "AvailabilityZones": [
+                    {
+                        "Fn::Select": [
+                            "0",
+                            {
+                                "Fn::GetAZs": {
+                                    "Ref": "AWS::Region"
+                                }
+                            }
+                        ]
+                    },
+                    {
+                        "Fn::Select": [
+                            "1",
+                            {
+                                "Fn::GetAZs": {
+                                    "Ref": "AWS::Region"
+                                }
+                            }
+                        ]
+                    }
+                ],
+                "DesiredCapacity": {
+                    "Ref": "InitialInstanceCount"
+                },
+                "LaunchConfigurationName": {
+                    "Ref": "LaunchConfig"
+                },
+                "LoadBalancerNames": [
+                    {
+                        "Ref": "ElasticLoadBalancer"
+                    }
+                ],
+                "MaxSize": {
+                    "Ref": "MaximumInstanceCount"
+                },
+                "MinSize": {
+                    "Ref": "MinimumInstanceCount"
+                },
+                "NotificationConfiguration": {
+                    "NotificationTypes": [
+                        "autoscaling:EC2_INSTANCE_LAUNCH",
+                        "autoscaling:EC2_INSTANCE_LAUNCH_ERROR",
+                        "autoscaling:EC2_INSTANCE_TERMINATE",
+                        "autoscaling:EC2_INSTANCE_TERMINATE_ERROR"
+                    ],
+                    "TopicARN": {
+                        "Ref": "NotificationTopic"
+                    }
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "PropagateAtLaunch": "true",
+                        "Value": {
+                            "Ref": "Project"
+                        }
+                    },
+                    {
+                        "Key": "Platform",
+                        "PropagateAtLaunch": "true",
+                        "Value": {
+                            "Ref": "Platform"
+                        }
+                    },
+                    {
+                        "Key": "Project",
+                        "PropagateAtLaunch": "true",
+                        "Value": {
+                            "Ref": "Project"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "PropagateAtLaunch": "true",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    },
+                    {
+                        "Key": "Purpose",
+                        "PropagateAtLaunch": "true",
+                        "Value": {
+                            "Ref": "Purpose"
+                        }
+                    },
+                    {
+                        "Key": "Change",
+                        "PropagateAtLaunch": "true",
+                        "Value": {
+                            "Ref": "Change"
+                        }
+                    }
+                ],
+                "VPCZoneIdentifier": {
+                    "Ref": "Subnets"
+                }
+            },
+            "Type": "AWS::AutoScaling::AutoScalingGroup",
+            "UpdatePolicy": {
+                "AutoScalingRollingUpdate": {
+                    "MaxBatchSize": "1",
+                    "MinInstancesInService": { "Ref": "MinInstancesInService" },
+                    "PauseTime": "PT1M0S"
+                }
+            }
+        },
+        "ServerScaleDownPolicy": {
+            "Properties": {
+                "AdjustmentType": "ChangeInCapacity",
+                "AutoScalingGroupName": {
+                    "Ref": "ServerAutoScalingGroup"
+                },
+                "Cooldown": "60",
+                "ScalingAdjustment": "-2"
+            },
+            "Type": "AWS::AutoScaling::ScalingPolicy"
+        },
+        "ServerScaleUpPolicy": {
+            "Properties": {
+                "AdjustmentType": "ChangeInCapacity",
+                "AutoScalingGroupName": {
+                    "Ref": "ServerAutoScalingGroup"
+                },
+                "Cooldown": "180",
+                "ScalingAdjustment": "2"
+            },
+            "Type": "AWS::AutoScaling::ScalingPolicy"
+        },
+        "DNSRecord" : {
+            "Type" : "AWS::Route53::RecordSetGroup",
+            "Condition" : "EnableDNSCondition",
+            "Properties" : {
+                "HostedZoneName" : { "Fn::Join" : [ "", [ { "Ref" : "DNSZoneName" }, "." ] ] },
+                "Comment" : "Zone apex alias targeted to myELB LoadBalancer.",
+                "RecordSets" : [ {
+                    "Name" : {
+                        "Fn::Join" : [
+                            "",
+                            [
+                                { "Ref" : "DNSShortName" },
+                                ".",
+                                { "Ref" : "DNSZoneName" },
+                                "."
+                            ]
+                        ]
+                    },
+                    "Type" : "A",
+                    "AliasTarget" : {
+                        "HostedZoneId" : { "Fn::GetAtt" : ["ElasticLoadBalancer", "CanonicalHostedZoneNameID"] },
+                        "DNSName" : { "Fn::GetAtt" : ["ElasticLoadBalancer","DNSName"] }
+                    }
+                } ]
+            }
+        }
+    }
+}
